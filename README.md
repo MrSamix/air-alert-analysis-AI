@@ -238,23 +238,58 @@ application:
 
 **Application overview**
 
-![Streamlit application overview](./docs/streamlit-overview.jpeg)
+![Streamlit application overview](./docs/streamlit-overview.png)
 
 **Building the dataset and configuring the chronological split**
 
-![Streamlit dataset and training controls](./docs/streamlit-training.jpeg)
+![Streamlit dataset and training controls](./docs/streamlit-training.png)
 
 **Generating the latest forecast with an explicit UTC as-of time**
 
-![Streamlit forecast controls](./docs/streamlit-forecast.jpeg)
+![Streamlit forecast controls](./docs/streamlit-forecast.png)
 
 **Reviewing saved metrics and reports**
 
-![Streamlit reports](./docs/streamlit-reports.jpeg)
+![Streamlit reports](./docs/streamlit-reports.png)
 
 These images document the interface layout. The displayed local paths and
 timestamps depend on the machine and dataset used when the screenshots were
 captured.
+
+## Example latest forecast
+
+The latest generated per-region forecast is available in
+[reports/latest_predictions.csv](./reports/latest_predictions.csv).
+
+This report was generated from the fully observed hour
+`2026-10-12 07:00 UTC` and covers the next three hours:
+
+```text
+forecast start: 2026-10-12 08:00 UTC
+forecast end:   2026-10-12 11:00 UTC (exclusive)
+threshold:      0.3541
+```
+
+Selected rows from the report:
+
+| Region | Probability | Prediction | Risk level |
+|---|---:|---:|---|
+| Харківська область | 0.983 | 1 | very_high |
+| Дніпропетровська область | 0.976 | 1 | very_high |
+| Миколаївська область | 0.939 | 1 | very_high |
+| Київська область | 0.931 | 1 | very_high |
+| Сумська область | 0.925 | 1 | very_high |
+| м. Київ | 0.629 | 1 | high |
+| Волинська область | 0.487 | 1 | medium |
+| Тернопільська область | 0.275 | 0 | medium |
+| Львівська область | 0.110 | 0 | low |
+| Закарпатська область | 0.005 | 0 | low |
+
+`prediction = 1` means that the probability is at least the selected
+threshold; it does not mean that an alert is guaranteed. The `probability`
+is a model estimate for at least one new alert start during the forecast
+window, not a prediction of exact alert time or duration. The model output is
+analytical and must not replace official air-alert notifications.
 
 ## Build a processed dataset
 
@@ -384,15 +419,27 @@ values used the previous feature policy and are not the current baseline.
 
 ## Limitations and next steps
 
-- Add automated tests for leakage, timestamp semantics, and inference schema
-  compatibility.
-- Verify the Streamlit workflow end to end after rebuilding the dataset.
-- Add selectable safety-first and precision-oriented thresholds to Streamlit.
-- Report metrics by region, not only globally.
-- Monitor future data and retrain using a documented rolling window.
-- Preserve the `as_of` timestamp and selected complete hour with every
-  operational forecast.
+The current MVP is functional and includes automated tests, Streamlit
+verification, leakage checks, timestamp semantics, rolling retraining, and
+training-window experiments. The remaining limitations and planned
+improvements are:
+
+- Add selectable threshold modes to Streamlit:
+  safety-first, balanced, precision-oriented, and custom threshold.
+- Add regional metrics and regional error summaries to the main model report.
+- Continue monitoring future observations and retrain with a documented
+  rolling schedule.
+- Repeat rolling evaluation on future test periods instead of relying on one
+  historical test window.
+- Persist the `as_of` timestamp and selected complete observation hour in every
+  operational forecast audit record.
 - Keep the fixed baseline test unchanged when comparing future model changes.
+- Finalize repository inclusion rules for raw data,
+  model artifacts, and generated reports.
+
+The model is a research prototype. Its probabilities are not official
+warnings, do not predict exact alert time or duration, and must not replace
+official air-alert notification systems.
 
 ## Rolling retraining experiment
 
