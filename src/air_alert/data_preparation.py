@@ -104,7 +104,12 @@ def build_hourly_panel(
     start: str | pd.Timestamp | None = None,
     end: str | pd.Timestamp | None = None,
 ) -> pd.DataFrame:
-    """Convert alert intervals into one row per oblast and UTC hour."""
+    """Convert alert intervals into one row per oblast and UTC hour.
+
+    The requested end date is an upper bound only. The hourly panel never
+    extends beyond the last observed event timestamp, preventing synthetic
+    future hours when a date range is longer than the raw CSV.
+    """
     required = {"region_id", "started_at", "finished_at"}
     missing = required.difference(events.columns)
     if missing:
@@ -117,10 +122,15 @@ def build_hourly_panel(
     start_at = _parse_boundary(start, "start")
     if start_at is None:
         start_at = events["started_at"].min().floor("h")
-    end_at = _parse_boundary(end, "end")
-    if end_at is None:
-        end_at = events[["started_at", "finished_at"]].max().max()
-        end_at = end_at.ceil("h") if pd.notna(end_at) else start_at + pd.Timedelta(hours=1)
+    requested_end = _parse_boundary(end, "end")
+    observed_end = events[["started_at", "finished_at"]].max().max()
+    if pd.isna(observed_end):
+        raise ValueError("Events have no valid observed timestamp")
+    # The hour containing the last event may still be in progress in the raw
+    # feed. Use its start as an exclusive boundary, so the panel contains only
+    # fully observed hours before it.
+    observed_end = observed_end.floor("h")
+    end_at = observed_end if requested_end is None else min(requested_end, observed_end)
     if start_at >= end_at:
         raise ValueError("start must be earlier than end")
     hours = pd.date_range(

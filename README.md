@@ -45,6 +45,33 @@ reports/           metrics, predictions, plots, and drift reports
 python -m pip install -e .
 ```
 
+For development and tests:
+
+```powershell
+python -m pip install -e ".[dev]"
+```
+
+## Automated tests
+
+Run the complete test suite from the repository root:
+
+```powershell
+$env:PYTHONPATH = "src"
+python -m pytest -q
+```
+
+Run a specific test file:
+
+```powershell
+$env:PYTHONPATH = "src"
+python -m pytest -q tests/test_data_preparation.py
+```
+
+The tests cover UTC normalization, Kyiv preservation, the observed-hour
+dataset cutoff, forward-target boundaries, leakage-safe feature selection,
+chronological split boundaries, and inference timestamp semantics. The
+current suite contains 7 tests.
+
 ## Streamlit interface
 
 The project includes a Streamlit UI in [app.py](./app.py). It is intended for
@@ -173,11 +200,19 @@ For example, with `horizon_hours=3` and a selected prediction timestamp of
 ### Streamlit notes
 
 - The UI uses UTC internally, as does the CLI pipeline.
+- The strict start-of-hour model does not use the current-hour
+  `alert_active` value. It uses only lagged and rolling `alert_active`
+  history, whose latest observation is strictly before the prediction hour.
 - Dates selected in the UI are passed to the same preparation functions as
   the CLI.
 - Uploading a file does not automatically replace the existing raw dataset;
   click **Save uploaded CSV** explicitly.
 - Build the processed dataset again whenever the raw CSV changes.
+- `--end-date` is only an upper bound. The builder caps the hourly grid before
+  the hour containing the last observed `started_at`/`finished_at` timestamp
+  in the raw CSV. This excludes a possibly incomplete current hour and avoids
+  creating empty future hours merely because a later calendar date was
+  selected.
 - Retrain the model when the feature dataset or training period changes.
 - The latest forecast is based on the last fully observed timestamp at the
   selected UTC as-of time. Rows later than that cutoff are ignored.
@@ -195,6 +230,31 @@ python -m pip install -e .
 If the application reports that a model artifact is missing, train the model
 first or enter the correct artifact path. If predictions use an old timestamp,
 rebuild the processed dataset with the updated raw CSV.
+
+### Streamlit screenshots
+
+The following screenshots show the main workflow in the local Streamlit
+application:
+
+**Application overview**
+
+![Streamlit application overview](./docs/streamlit-overview.jpeg)
+
+**Building the dataset and configuring the chronological split**
+
+![Streamlit dataset and training controls](./docs/streamlit-training.jpeg)
+
+**Generating the latest forecast with an explicit UTC as-of time**
+
+![Streamlit forecast controls](./docs/streamlit-forecast.jpeg)
+
+**Reviewing saved metrics and reports**
+
+![Streamlit reports](./docs/streamlit-reports.jpeg)
+
+These images document the interface layout. The displayed local paths and
+timestamps depend on the machine and dataset used when the screenshots were
+captured.
 
 ## Build a processed dataset
 
@@ -293,35 +353,110 @@ updated whenever the dataset, split, or model artifact changes.
 
 ## Current model result
 
-Using the current dataset and the split:
+Using the current leakage-safe pipeline, dataset, and fixed baseline split:
 
 ```text
 Train:      before 2026-09-20
 Validation: 2026-09-20 through 2026-09-30
-Test:       2026-10-01 through 2026-10-11
+Test:       2026-10-01 through the latest valid target timestamp
 ```
 
 the current test metrics are:
 
 ```text
-PR-AUC:    0.9149
-ROC-AUC:   0.8909
-Precision: 0.8052
-Recall:    0.9078
-LogLoss:   0.4056
-Brier:     0.1292
+PR-AUC:    0.9124
+ROC-AUC:   0.8868
+Precision: 0.7961
+Recall:    0.9113
+LogLoss:   0.4123
+Brier:     0.1317
+Threshold: 0.3541
 ```
 
 These numbers are dataset- and split-specific. They are not a guarantee of
-future operational performance.
+future operational performance. The test target is available only through
+`2026-10-12 05:00 UTC` because a three-hour forward target requires three
+subsequent observed hours.
+
+For historical comparison, the previous pipeline version reported PR-AUC
+`0.9149`, ROC-AUC `0.8909`, precision `0.8052`, and recall `0.9078`. Those
+values used the previous feature policy and are not the current baseline.
 
 ## Limitations and next steps
 
-- Validate the model on future data not used for threshold selection.
-- Monitor concept drift and retrain using a documented rolling window.
-- Compare full-history, 30-day, 60-day, and 90-day training windows.
-- Calibrate thresholds for safety-first and precision-oriented use cases.
+- Add automated tests for leakage, timestamp semantics, and inference schema
+  compatibility.
+- Verify the Streamlit workflow end to end after rebuilding the dataset.
+- Add selectable safety-first and precision-oriented thresholds to Streamlit.
 - Report metrics by region, not only globally.
-- Add automated tests for leakage and inference schema compatibility.
+- Monitor future data and retrain using a documented rolling window.
 - Preserve the `as_of` timestamp and selected complete hour with every
   operational forecast.
+- Keep the fixed baseline test unchanged when comparing future model changes.
+
+## Rolling retraining experiment
+
+The repository includes an expanding-window experiment:
+
+```powershell
+$env:PYTHONPATH = "src"
+
+python scripts/rolling_experiment.py `
+    data/processed/latest_features.csv `
+    --output-path reports/rolling_retraining_experiment.csv
+```
+
+Each run keeps validation and test chronological. The model is trained from
+the beginning of the dataset up to a later `train_end`; the validation window
+also moves forward. No test rows are used for threshold selection.
+
+The report contains one row per run with split sizes, threshold, PR-AUC,
+ROC-AUC, LogLoss, Brier score, precision, and recall. This is a monitoring
+experiment, not a license to select a model on the final test period.
+
+## Training-window experiment
+
+To compare how much history the model should use, run:
+
+```powershell
+$env:PYTHONPATH = "src"
+
+python scripts/training_window_experiment.py `
+    data/processed/latest_features.csv `
+    --output-path reports/training_window_experiment.csv
+```
+
+All four models use the same fixed split:
+
+```text
+Train end:      2026-09-20
+Validation end: 2026-10-01
+Test:           after 2026-10-01
+```
+
+Only the training rows change:
+
+```text
+full_history: all rows before 2026-09-20
+90d:          last 90 days before 2026-09-20
+60d:          last 60 days before 2026-09-20
+30d:          last 30 days before 2026-09-20
+```
+
+The validation set remains responsible for threshold selection, and the test
+set is used only for the final comparison.
+
+The current results are:
+
+| Window | Train rows | Threshold | PR-AUC | ROC-AUC | LogLoss | Brier | Precision | Recall |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Full history | 70,272 | 0.3541 | 0.9124 | **0.8868** | **0.4123** | **0.1317** | 0.7961 | **0.9113** |
+| 90 days | 51,840 | 0.3631 | **0.9097** | 0.8853 | 0.4128 | 0.1317 | 0.7986 | **0.9142** |
+| 60 days | 34,560 | 0.4298 | 0.9076 | 0.8812 | 0.4197 | 0.1345 | **0.8055** | 0.8983 |
+| 30 days | 17,280 | 0.4065 | 0.8927 | 0.8678 | 0.4444 | 0.1423 | 0.7906 | 0.9006 |
+
+The full-history window is the current default because it has the strongest
+overall ranking and calibration metrics while retaining high recall. The
+90-day window is a close alternative when a slightly higher recall is more
+important. The 30-day window loses ranking and calibration quality on this
+test period, so it should not replace full history without further evidence.

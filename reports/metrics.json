@@ -1,23 +1,23 @@
 {
   "train_rows": 70272,
   "validation_rows": 6336,
-  "test_rows": 6264,
-  "threshold": 0.38707293012879707,
+  "test_rows": 6480,
+  "threshold": 0.3540736077192956,
   "validation_metrics": {
-    "pr_auc": 0.9152165249355713,
-    "roc_auc": 0.8994072082396735,
-    "log_loss": 0.3899510963286806,
-    "brier": 0.12193176763380369,
-    "precision": 0.8195926285160039,
-    "recall": 0.9164859002169198
+    "pr_auc": 0.9140953426009779,
+    "roc_auc": 0.8975436174151816,
+    "log_loss": 0.3938000999980897,
+    "brier": 0.12334275296495716,
+    "precision": 0.8127832101120915,
+    "recall": 0.9240780911062907
   },
   "test_metrics": {
-    "pr_auc": 0.914941459217942,
-    "roc_auc": 0.8908635178923789,
-    "log_loss": 0.4056251162550118,
-    "brier": 0.12924928227302926,
-    "precision": 0.8052290717198369,
-    "recall": 0.9077879935100054
+    "pr_auc": 0.9124260561969558,
+    "roc_auc": 0.8868199993210157,
+    "log_loss": 0.4122957022167477,
+    "brier": 0.13171227139854638,
+    "precision": 0.7961363636363636,
+    "recall": 0.9112903225806451
   },
   "artifact_path": "D:\\proj\\air-alert-analysis-AI\\models\\air_alert_model.pkl",
   "horizon_hours": 3

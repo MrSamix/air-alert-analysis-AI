@@ -35,6 +35,10 @@ def main() -> None:
         start=args.start_date,
         end=args.end_date,
     )
+    print(
+        "The requested end date is an upper bound; the processed dataset "
+        "stops before the hour containing the last observed event."
+    )
 
 
 if __name__ == "__main__":

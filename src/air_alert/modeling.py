@@ -59,7 +59,10 @@ def chronological_split(
 
 
 def _feature_columns(frame: pd.DataFrame) -> list[str]:
-    excluded = {"timestamp", "target_3h", "alert_started"}
+    # The current-hour state may become known during the hour, so it is not
+    # available at a strict start-of-hour prediction timestamp. Historical
+    # alert_active lag/rolling features remain valid because they are shifted.
+    excluded = {"timestamp", "target_3h", "alert_started", "alert_active"}
     return [
         column
         for column in frame.columns
