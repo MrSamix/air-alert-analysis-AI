@@ -45,6 +45,157 @@ reports/           metrics, predictions, plots, and drift reports
 python -m pip install -e .
 ```
 
+## Streamlit interface
+
+The project includes a Streamlit UI in [app.py](./app.py). It is intended for
+interactive exploration and demo usage, while the CLI scripts remain the
+reproducible and automation-friendly interface.
+
+### Start the application
+
+Install the project dependencies:
+
+```powershell
+python -m pip install -e .
+```
+
+Start Streamlit from the repository root:
+
+```powershell
+streamlit run app.py
+```
+
+The application opens in a browser, usually at:
+
+```text
+http://localhost:8501
+```
+
+### UI workflow
+
+#### 1. Select the input data
+
+In the sidebar, either:
+
+- upload a raw CSV and click **Save uploaded CSV**; or
+- enter the path to an existing CSV, for example:
+
+  ```text
+  data/raw/alerts.csv
+  ```
+
+Supported raw formats are documented in the
+[dataset preparation section](#build-a-processed-dataset).
+
+#### 2. Build hourly features
+
+Set:
+
+- start date;
+- inclusive end date;
+- forecast horizon in hours.
+
+Then click **Build hourly features**. The UI creates the processed hourly
+dataset with:
+
+- one row per region and hour;
+- `alert_started`;
+- `alert_active`;
+- the forward target for training;
+- lag, rolling, EWMA, and calendar features.
+
+The processed path can be changed from the default:
+
+```text
+data/processed/latest_features.csv
+```
+
+#### 3. Train and save the model
+
+Set the exclusive boundaries:
+
+```text
+Train end:      2026-09-20
+Validation end: 2026-10-01
+```
+
+The split is chronological:
+
+```text
+train:      timestamp < train_end
+validation: train_end <= timestamp < validation_end
+test:       timestamp >= validation_end
+```
+
+Click **Train and save model**. The UI writes:
+
+- model artifact, by default to `models/air_alert_model.pkl`;
+- metrics, by default to `reports/metrics.json`;
+- test predictions, by default to `reports/test_predictions.csv`.
+
+The saved artifact includes the model, feature schema, training regions,
+threshold, and forecast horizon.
+
+#### 4. Generate the latest forecast
+
+Click **Generate latest forecast** after training. The UI loads the saved
+artifact and predicts from the latest fully observed hour at the selected
+UTC as-of time.
+
+The output contains:
+
+```text
+prediction_timestamp
+forecast_start_timestamp
+forecast_end_timestamp
+region_id
+probability
+prediction
+threshold
+horizon_hours
+risk_level
+```
+
+The result is saved by default to:
+
+```text
+reports/latest_predictions.csv
+```
+
+For example, with `horizon_hours=3` and a selected prediction timestamp of
+`23:00 UTC`, the forecast concerns the following three complete hours:
+
+```text
+00:00–03:00 UTC
+03:00–06:00 Europe/Kyiv
+```
+
+### Streamlit notes
+
+- The UI uses UTC internally, as does the CLI pipeline.
+- Dates selected in the UI are passed to the same preparation functions as
+  the CLI.
+- Uploading a file does not automatically replace the existing raw dataset;
+  click **Save uploaded CSV** explicitly.
+- Build the processed dataset again whenever the raw CSV changes.
+- Retrain the model when the feature dataset or training period changes.
+- The latest forecast is based on the last fully observed timestamp at the
+  selected UTC as-of time. Rows later than that cutoff are ignored.
+- The model output is an analytical probability and must not replace official
+  air-alert notifications.
+
+### Troubleshooting
+
+If `streamlit` is not recognized, install the project dependencies again:
+
+```powershell
+python -m pip install -e .
+```
+
+If the application reports that a model artifact is missing, train the model
+first or enter the correct artifact path. If predictions use an old timestamp,
+rebuild the processed dataset with the updated raw CSV.
+
 ## Build a processed dataset
 
 The loader supports both:
@@ -94,8 +245,33 @@ python scripts/predict.py `
 ```
 
 The output contains a probability and binary decision for each region at the
-latest available hourly timestamp. `horizon_hours=3` means the forecast covers
-the following three complete hours.
+latest fully observed hourly timestamp. By default, the CLI uses the current
+UTC time as `as_of` and excludes the current, still-in-progress hour.
+`horizon_hours=3` means the forecast covers the following three complete hours.
+
+To reproduce a forecast for a fixed historical cutoff:
+
+```powershell
+python scripts/predict.py `
+    data/processed/latest_features.csv `
+    models/air_alert_model.pkl `
+    reports/latest_predictions.csv `
+    --as-of 2026-10-12T15:32:00+00:00
+```
+
+For this example, the latest usable prediction timestamp is `2026-10-12
+14:00 UTC`; the forecast covers `15:00–18:00 UTC`. The output records:
+
+```text
+prediction_timestamp       last complete observation hour
+forecast_start_timestamp   first future hour being forecast
+forecast_end_timestamp     exclusive end of the forecast window
+```
+
+This distinction prevents a processed dataset with rows extended to a future
+`--end-date` from silently producing a forecast from an incomplete or
+not-yet-observed hour. The same rule is applied by the Streamlit interface via
+its **Forecast as-of time (UTC)** control.
 
 ## Analysis
 
@@ -147,3 +323,5 @@ future operational performance.
 - Calibrate thresholds for safety-first and precision-oriented use cases.
 - Report metrics by region, not only globally.
 - Add automated tests for leakage and inference schema compatibility.
+- Preserve the `as_of` timestamp and selected complete hour with every
+  operational forecast.
