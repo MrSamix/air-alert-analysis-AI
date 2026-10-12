@@ -15,7 +15,7 @@ REQUIRED_COLUMNS = {
     "finished_at",
     "source",
 }
-VOLUNTEER_COLUMNS = {"region", "started_at", "finished_at", "naive"}
+VOLUNTEER_REQUIRED_COLUMNS = {"region", "started_at", "finished_at"}
 
 
 def _parse_boundary(value: str | pd.Timestamp | None, name: str) -> pd.Timestamp | None:
@@ -38,10 +38,13 @@ def load_oblast_events(
 ) -> pd.DataFrame:
     """Load oblast alert intervals from official or volunteer CSV format."""
     events = pd.read_csv(path)
-    if VOLUNTEER_COLUMNS.issubset(events.columns):
+    if VOLUNTEER_REQUIRED_COLUMNS.issubset(events.columns):
         events = events.rename(columns={"region": "region_id"}).copy()
         events["source"] = "volunteer"
-        events["naive"] = events["naive"].fillna(False).astype(bool)
+        if "naive" in events.columns:
+            events["naive"] = events["naive"].fillna(False).astype(bool)
+        else:
+            events["naive"] = False
     else:
         missing = REQUIRED_COLUMNS.difference(events.columns)
         if missing:

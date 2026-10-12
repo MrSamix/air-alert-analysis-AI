@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from air_alert.modeling import chronological_split, train_classifier
+from air_alert.modeling import chronological_split, save_artifact, train_classifier
 
 
 def main() -> None:
@@ -18,11 +18,14 @@ def main() -> None:
     parser.add_argument("validation_end", help="Exclusive validation end")
     parser.add_argument("--report-path", default="reports/metrics.json")
     parser.add_argument("--predictions-path", default="reports/test_predictions.csv")
+    parser.add_argument("--artifact-path", default="models/air_alert_model.pkl")
+    parser.add_argument("--horizon-hours", type=int, default=3)
     args = parser.parse_args()
 
     dataset = pd.read_csv(args.dataset_path)
     split = chronological_split(dataset, args.train_end, args.validation_end)
     result = train_classifier(split)
+    save_artifact(result, args.artifact_path, horizon_hours=args.horizon_hours)
 
     report = {
         "train_rows": len(split.train),
@@ -31,6 +34,8 @@ def main() -> None:
         "threshold": result["threshold"],
         "validation_metrics": result["validation_metrics"],
         "test_metrics": result["test_metrics"],
+        "artifact_path": args.artifact_path,
+        "horizon_hours": args.horizon_hours,
     }
     report_path = Path(args.report_path)
     predictions_path = Path(args.predictions_path)

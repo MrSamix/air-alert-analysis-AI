@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from pathlib import Path
+import pickle
 
 import numpy as np
 import pandas as pd
@@ -73,12 +75,7 @@ def make_design_matrices(
     feature_columns = _feature_columns(split.train)
 
     def transform(frame: pd.DataFrame) -> pd.DataFrame:
-        numeric = frame[feature_columns].apply(pd.to_numeric, errors="coerce")
-        regions = pd.get_dummies(frame["region_id"], prefix="region", dtype="int8")
-        regions = regions.reindex(
-            columns=[f"region_{region}" for region in train_regions], fill_value=0
-        )
-        return pd.concat([numeric.reset_index(drop=True), regions.reset_index(drop=True)], axis=1)
+        return make_design_matrix(frame, feature_columns, train_regions)
 
     return (
         transform(split.train),
@@ -86,6 +83,53 @@ def make_design_matrices(
         transform(split.test),
         feature_columns,
     )
+
+
+def make_design_matrix(
+    frame: pd.DataFrame,
+    feature_columns: list[str],
+    train_regions: list[str],
+) -> pd.DataFrame:
+    """Transform rows using the exact feature and region schema from training."""
+    missing = set(feature_columns) - set(frame.columns)
+    if missing:
+        raise ValueError(
+            f"Dataset is missing model features: {', '.join(sorted(missing))}"
+        )
+    numeric = frame[feature_columns].apply(pd.to_numeric, errors="coerce")
+    regions = pd.get_dummies(frame["region_id"], prefix="region", dtype="int8")
+    regions = regions.reindex(
+        columns=[f"region_{region}" for region in train_regions], fill_value=0
+    )
+    return pd.concat(
+        [numeric.reset_index(drop=True), regions.reset_index(drop=True)], axis=1
+    )
+
+
+def save_artifact(result: dict[str, Any], path: str | Path, horizon_hours: int = 3) -> None:
+    """Persist the trained model and the exact inference schema."""
+    artifact = {
+        "model": result["model"],
+        "feature_columns": result["feature_columns"],
+        "region_columns": result["region_columns"],
+        "threshold": result["threshold"],
+        "horizon_hours": horizon_hours,
+        "model_type": "HistGradientBoostingClassifier",
+    }
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with destination.open("wb") as file:
+        pickle.dump(artifact, file, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+def load_artifact(path: str | Path) -> dict[str, Any]:
+    with Path(path).open("rb") as file:
+        artifact = pickle.load(file)
+    required = {"model", "feature_columns", "region_columns", "threshold"}
+    missing = required.difference(artifact)
+    if missing:
+        raise ValueError(f"Model artifact is missing: {', '.join(sorted(missing))}")
+    return artifact
 
 
 def _safe_metric(metric: Any, y_true: pd.Series, probabilities: np.ndarray) -> float:
@@ -121,6 +165,7 @@ def choose_threshold(y_true: pd.Series, probabilities: np.ndarray) -> float:
 
 def train_classifier(split: TimeSplit) -> dict[str, Any]:
     x_train, x_validation, x_test, feature_columns = make_design_matrices(split)
+    train_regions = sorted(split.train["region_id"].dropna().unique())
     y_train = split.train["target_3h"].astype("int8")
     y_validation = split.validation["target_3h"].astype("int8")
     y_test = split.test["target_3h"].astype("int8")
@@ -139,6 +184,7 @@ def train_classifier(split: TimeSplit) -> dict[str, Any]:
     return {
         "model": model,
         "feature_columns": feature_columns,
+        "region_columns": train_regions,
         "threshold": threshold,
         "validation_metrics": evaluate_predictions(
             y_validation, validation_probability, threshold
