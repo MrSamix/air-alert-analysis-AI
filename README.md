@@ -18,6 +18,31 @@ The current model covers 24 regions, including `м. Київ`, and uses UTC
 timestamps internally. The current production-like artifact uses the volunteer
 oblast-level dataset without the `naive` column.
 
+### Streamlit screenshots
+
+The following screenshots show the main workflow in the local Streamlit
+application:
+
+**Application overview**
+
+![Streamlit application overview](./docs/streamlit-overview.jpeg)
+
+**Building the dataset and configuring the chronological split**
+
+![Streamlit dataset and training controls](./docs/streamlit-training.jpeg)
+
+**Generating the latest forecast with an explicit UTC as-of time**
+
+![Streamlit forecast controls](./docs/streamlit-forecast.jpeg)
+
+**Reviewing saved metrics and reports**
+
+![Streamlit reports](./docs/streamlit-reports.jpeg)
+
+These images document the interface layout. The displayed local paths and
+timestamps depend on the machine and dataset used when the screenshots were
+captured.
+
 ## Leakage policy
 
 - Train, validation, and test periods are strictly chronological.
@@ -230,31 +255,6 @@ python -m pip install -e .
 If the application reports that a model artifact is missing, train the model
 first or enter the correct artifact path. If predictions use an old timestamp,
 rebuild the processed dataset with the updated raw CSV.
-
-### Streamlit screenshots
-
-The following screenshots show the main workflow in the local Streamlit
-application:
-
-**Application overview**
-
-![Streamlit application overview](./docs/streamlit-overview.png)
-
-**Building the dataset and configuring the chronological split**
-
-![Streamlit dataset and training controls](./docs/streamlit-training.png)
-
-**Generating the latest forecast with an explicit UTC as-of time**
-
-![Streamlit forecast controls](./docs/streamlit-forecast.png)
-
-**Reviewing saved metrics and reports**
-
-![Streamlit reports](./docs/streamlit-reports.png)
-
-These images document the interface layout. The displayed local paths and
-timestamps depend on the machine and dataset used when the screenshots were
-captured.
 
 ## Example latest forecast
 
