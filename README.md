@@ -18,6 +18,12 @@ The current model covers 24 regions, including `м. Київ`, and uses UTC
 timestamps internally. The current production-like artifact uses the volunteer
 oblast-level dataset without the `naive` column.
 
+## Streamlit interface
+
+The project includes a Streamlit UI in [app.py](./app.py). It is intended for
+interactive exploration and demo usage, while the CLI scripts remain the
+reproducible and automation-friendly interface.
+
 ### Streamlit screenshots
 
 The following screenshots show the main workflow in the local Streamlit
@@ -56,12 +62,35 @@ captured.
 ## Repository structure
 
 ```text
-data/raw/          source CSV files
-data/processed/    hourly feature datasets
-src/air_alert/     preparation, features, modeling, inference
-scripts/           dataset, training, prediction, and analysis commands
-models/            serialized model artifacts
-reports/           metrics, predictions, plots, and drift reports
+app.py                         Streamlit interface
+pyproject.toml                 project and dependency configuration
+requirements.txt               exported runtime dependencies
+README.md                      project documentation
+
+data/
+├── raw/                       source CSV files
+└── processed/                 hourly feature datasets
+
+src/air_alert/
+├── data_preparation.py        CSV loading and hourly panel construction
+├── features.py                leakage-safe feature engineering
+├── modeling.py                chronological split and model training
+└── inference.py               timestamp-aware latest forecast
+
+scripts/
+├── build_dataset.py           build the processed hourly dataset
+├── train_model.py             train and save a model artifact
+├── predict.py                 generate the latest forecast
+├── analyze_model.py           plots, errors, and drift analysis
+├── threshold_analysis.py      threshold trade-off analysis
+├── rolling_experiment.py      expanding-window retraining experiment
+└── training_window_experiment.py
+                               compare 30/60/90/full-history windows
+
+tests/                         automated leakage and pipeline tests
+docs/                          Streamlit screenshots
+models/                        serialized model artifacts
+reports/                       metrics, predictions, and experiment reports
 ```
 
 ## Installation
@@ -96,12 +125,6 @@ The tests cover UTC normalization, Kyiv preservation, the observed-hour
 dataset cutoff, forward-target boundaries, leakage-safe feature selection,
 chronological split boundaries, and inference timestamp semantics. The
 current suite contains 7 tests.
-
-## Streamlit interface
-
-The project includes a Streamlit UI in [app.py](./app.py). It is intended for
-interactive exploration and demo usage, while the CLI scripts remain the
-reproducible and automation-friendly interface.
 
 ### Start the application
 
